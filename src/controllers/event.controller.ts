@@ -1,9 +1,18 @@
 import type { Request, Response } from 'express';
 import prisma from '../lib/prisma.js';
+import { getCachedData, cacheData, clearCache } from '../lib/redis.js';
+
+const CACHE_KEY = 'events';
 
 export const getEvents = async (req: Request, res: Response) => {
     try {
-        const events = await prisma.event.findMany();
+        const cached = await getCachedData(CACHE_KEY);
+        if (cached) return res.json(cached);
+
+        const events = await prisma.event.findMany({
+            orderBy: { date: 'desc' }
+        });
+        await cacheData(CACHE_KEY, events);
         res.json(events);
     } catch (error) {
         console.error("Error fetching events:", error);
@@ -26,6 +35,7 @@ export const createEvent = async (req: Request, res: Response) => {
                 status: status || 'UPCOMING'
             },
         });
+        await clearCache(CACHE_KEY);
         res.status(201).json(event);
     } catch (error) {
         console.error("Error creating event:", error);
@@ -37,6 +47,7 @@ export const deleteEvent = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         await prisma.event.delete({ where: { id: id as string } });
+        await clearCache(CACHE_KEY);
         res.json({ message: 'Event deleted' });
     } catch (error) {
         console.error("Error deleting event:", error);

@@ -5,6 +5,7 @@ import boardRoutes from './routes/board.routes.js';
 import advisoryRoutes from './routes/advisory.routes.js';
 import eventRoutes from './routes/event.routes.js';
 import authRoutes from './routes/auth.routes.js';
+import aiRoutes from './routes/ai.routes.js';
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/board-members', boardRoutes);
 app.use('/api/advisory', advisoryRoutes);
 app.use('/api/events', eventRoutes);
+app.use('/api/ai', aiRoutes);
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
