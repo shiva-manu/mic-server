@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { createContact, getContacts, deleteContact } from '../controllers/contact.controller.js';
-import { authenticateQuery } from '../lib/auth.js';
+import { authenticate } from '../lib/auth.middleware.js';
 
 const router = Router();
 
 router.post('/', createContact);
-router.get('/', authenticateQuery, getContacts);
-router.delete('/:id', authenticateQuery, deleteContact);
+router.get('/', authenticate, getContacts);
+router.delete('/:id', authenticate, deleteContact);
 
 export default router;

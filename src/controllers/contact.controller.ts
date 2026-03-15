@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import type { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -43,7 +43,7 @@ export const deleteContact = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         await prisma.contact.delete({
-            where: { id }
+            where: { id: id as string }
         });
         res.json({ message: 'Contact deleted successfully' });
     } catch (error) {
