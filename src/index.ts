@@ -32,6 +32,10 @@ app.use('/api/events', eventRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/contact', contactRoutes);
 
+app.get("/health", (req, res) => {
+    res.status(200).send("Server is awake");
+})
+
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });
