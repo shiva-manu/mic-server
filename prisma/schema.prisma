@@ -34,17 +34,18 @@ model Advisory {
 }
 
 model Event {
-  id          String      @id @default(cuid())
-  title       String
-  description String
-  date        String
-  location    String
-  time        String
-  image       String
-  tags        String[]
-  status      EventStatus @default(UPCOMING)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  id              String      @id @default(cuid())
+  title           String
+  description     String
+  date            String
+  location        String
+  time            String
+  image           String
+  tags            String[]
+  status          EventStatus @default(UPCOMING)
+  feedbackFormUrl String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 }
 
 enum EventStatus {
