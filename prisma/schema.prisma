@@ -70,3 +70,33 @@ model Contact {
   email      String
   createdAt  DateTime @default(now())
 }
+
+model Idea {
+  id             String     @id @default(cuid())
+  title          String
+  description    String
+  author_name    String     @map("author_name")
+  author_avatar  String?    @map("author_avatar")
+  author_id      String     @map("author_id")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  upvotes        Int        @default(0)
+  downvotes      Int        @default(0)
+  tags           String[]
+  github_link    String?    @map("github_link")
+  board_response String?    @map("board_response")
+  votes          IdeaVote[]
+
+  @@map("ideas")
+}
+
+model IdeaVote {
+  id        String   @id @default(cuid())
+  idea_id   String   @map("idea_id")
+  user_id   String   @map("user_id")
+  vote_type String   @map("vote_type") // 'up' or 'down'
+  createdAt DateTime @default(now()) @map("created_at")
+  idea      Idea     @relation(fields: [idea_id], references: [id], onDelete: Cascade)
+
+  @@unique([idea_id, user_id])
+  @@map("idea_votes")
+}
