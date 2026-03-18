@@ -19,6 +19,34 @@ function parseEventDate(dateStr: string): Date | null {
 }
 
 /**
+ * Parse a time match into { hours, minutes } in 24h format.
+ */
+function parseTimeMatch(match: RegExpMatchArray): { hours: number; minutes: number } {
+    let hours = parseInt(match[1]);
+    const minutes = parseInt(match[2] || '0');
+    const period = match[3]?.toUpperCase();
+
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+
+    return { hours, minutes };
+}
+
+/**
+ * Parse start time from free-text time string like "2:00 PM - 4:00 PM" or "9:00 AM onwards".
+ * Returns the start time (first time found) as { hours, minutes } in 24h format.
+ */
+function parseStartTime(timeStr: string): { hours: number; minutes: number } | null {
+    const timeRegex = /(\d{1,2})(?::(\d{2}))?\s*(AM|PM|am|pm)?/g;
+    const matches = [...timeStr.matchAll(timeRegex)];
+
+    if (matches.length === 0) return null;
+
+    // Use the first time found (start time in "2:00 PM - 4:00 PM")
+    return parseTimeMatch(matches[0]);
+}
+
+/**
  * Parse end time from free-text time string like "2:00 PM - 4:00 PM" or "9:00 AM onwards".
  * Returns the end time (or the only time if just one is given) as { hours, minutes } in 24h format.
  */
@@ -30,15 +58,7 @@ function parseEndTime(timeStr: string): { hours: number; minutes: number } | nul
     if (matches.length === 0) return null;
 
     // Use the last time found (end time in "2:00 PM - 4:00 PM")
-    const match = matches[matches.length - 1];
-    let hours = parseInt(match[1]);
-    const minutes = parseInt(match[2] || '0');
-    const period = match[3]?.toUpperCase();
-
-    if (period === 'PM' && hours !== 12) hours += 12;
-    if (period === 'AM' && hours === 12) hours = 0;
-
-    return { hours, minutes };
+    return parseTimeMatch(matches[matches.length - 1]);
 }
 
 /**
@@ -59,6 +79,67 @@ function isEventExpired(event: { date: string; time: string }): boolean {
     }
 
     return now > eventDate;
+}
+
+/**
+ * Check if an UPCOMING event should transition to LIVE.
+ * An event becomes LIVE when current time >= start time on the event date.
+ */
+function isEventLive(event: { date: string; time: string }): boolean {
+    const eventDate = parseEventDate(event.date);
+    if (!eventDate) return false;
+
+    const startTime = parseStartTime(event.time);
+    const endTime = parseEndTime(event.time);
+    const now = new Date();
+
+    // Create start datetime
+    const startDateTime = new Date(eventDate);
+    if (startTime) {
+        startDateTime.setHours(startTime.hours, startTime.minutes, 0, 0);
+    } else {
+        // If no time can be parsed, consider start of day
+        startDateTime.setHours(0, 0, 0, 0);
+    }
+
+    // Create end datetime
+    const endDateTime = new Date(eventDate);
+    if (endTime) {
+        endDateTime.setHours(endTime.hours, endTime.minutes, 0, 0);
+    } else {
+        // If no time can be parsed, consider end of day
+        endDateTime.setHours(23, 59, 59, 999);
+    }
+
+    // Event is LIVE if now >= start time AND now <= end time
+    return now >= startDateTime && now <= endDateTime;
+}
+
+/**
+ * Auto-activate UPCOMING events to LIVE: transitions UPCOMING events to LIVE
+ * when their start date+time has been reached but end time hasn't passed.
+ */
+async function autoActivateLiveEvents(): Promise<boolean> {
+    let changed = false;
+    try {
+        const upcomingEvents = await prisma.event.findMany({
+            where: { status: 'UPCOMING' }
+        });
+
+        for (const event of upcomingEvents) {
+            if (isEventLive(event)) {
+                await prisma.event.update({
+                    where: { id: event.id },
+                    data: { status: 'LIVE' }
+                });
+                changed = true;
+                console.log(`Auto-activated event to LIVE: "${event.title}" (${event.id})`);
+            }
+        }
+    } catch (error) {
+        console.error('Error during auto-activate:', error);
+    }
+    return changed;
 }
 
 /**
@@ -92,11 +173,12 @@ async function autoArchiveExpiredEvents(): Promise<boolean> {
 
 export const getEvents = async (req: Request, res: Response) => {
     try {
-        // Run auto-archive before serving events
+        // Run auto-activate (UPCOMING -> LIVE) and auto-archive (LIVE/UPCOMING -> COMPLETED) before serving events
+        const activateChanged = await autoActivateLiveEvents();
         const archiveChanged = await autoArchiveExpiredEvents();
 
-        // If any events were archived, clear the cache
-        if (archiveChanged) {
+        // If any events changed status, clear the cache
+        if (activateChanged || archiveChanged) {
             await clearCache(CACHE_KEY);
         }
 
