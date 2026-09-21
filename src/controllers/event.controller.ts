@@ -1,8 +1,5 @@
 import type { Request, Response } from 'express';
 import prisma from '../lib/prisma.js';
-import { getCachedData, cacheData, clearCache } from '../lib/redis.js';
-
-const CACHE_KEY = 'events';
 
 /**
  * Parse free-text date like "March 17, 2026" or "Mar 17, 2026" into a Date object.
@@ -174,21 +171,12 @@ async function autoArchiveExpiredEvents(): Promise<boolean> {
 export const getEvents = async (req: Request, res: Response) => {
     try {
         // Run auto-activate (UPCOMING -> LIVE) and auto-archive (LIVE/UPCOMING -> COMPLETED) before serving events
-        const activateChanged = await autoActivateLiveEvents();
-        const archiveChanged = await autoArchiveExpiredEvents();
-
-        // If any events changed status, clear the cache
-        if (activateChanged || archiveChanged) {
-            await clearCache(CACHE_KEY);
-        }
-
-        const cached = await getCachedData(CACHE_KEY);
-        if (cached) return res.json(cached);
+        await autoActivateLiveEvents();
+        await autoArchiveExpiredEvents();
 
         const events = await prisma.event.findMany({
             orderBy: { createdAt: 'desc' }
         });
-        await cacheData(CACHE_KEY, events);
         res.json(events);
     } catch (error) {
         console.error("Error fetching events:", error);
@@ -212,7 +200,6 @@ export const createEvent = async (req: Request, res: Response) => {
                 feedbackFormUrl: feedbackFormUrl || null
             },
         });
-        await clearCache(CACHE_KEY);
         res.status(201).json(event);
     } catch (error) {
         console.error("Error creating event:", error);
@@ -233,7 +220,6 @@ export const updateEvent = async (req: Request, res: Response) => {
             where: { id: id as string },
             data: updateData
         });
-        await clearCache(CACHE_KEY);
         res.json(event);
     } catch (error) {
         console.error("Error updating event:", error);
@@ -245,7 +231,6 @@ export const deleteEvent = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         await prisma.event.delete({ where: { id: id as string } });
-        await clearCache(CACHE_KEY);
         res.json({ message: 'Event deleted' });
     } catch (error) {
         console.error("Error deleting event:", error);
